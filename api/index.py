@@ -5,6 +5,10 @@ import os
 # --- THIS IS STEP 3: DEFINING 'app' ---
 app = FastAPI() 
 
+@app.get("/api/main")
+def read_root():
+    return {"status": "ok"}
+
 @app.get("/api/health")
 def health_check():
     """This helps you test if the deployment is live"""
