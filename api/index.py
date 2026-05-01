@@ -1,40 +1,40 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from otterai import OtterAI
 import os
+import requests
+from fastapi import FastAPI, UploadFile, File
 
-# --- THIS IS STEP 3: DEFINING 'app' ---
-app = FastAPI() 
-
-@app.get("/api/main")
-def read_root():
-    return {"status": "ok"}
+app = FastAPI()
 
 @app.get("/api/health")
-def health_check():
-    """This helps you test if the deployment is live"""
-    return {"status": "success", "message": "Python backend is active"}
+def health():
+    return {"status": "Live", "message": "No extra libraries needed!"}
 
 @app.post("/api/upload")
-async def handle_audio_upload(file: UploadFile = File(...)):
-    """This handles your 3-speaker noisy audio"""
+async def upload_to_otter(file: UploadFile = File(...)):
+    # 1. Get credentials from Vercel settings
     email = os.getenv("OTTER_EMAIL")
     password = os.getenv("OTTER_PASSWORD")
     
     if not email or not password:
-        return {"error": "Otter credentials missing in Vercel settings"}
+        return {"error": "Missing OTTER_EMAIL or OTTER_PASSWORD in Vercel"}
 
-    try:
-        otter = OtterAI()
-        otter.login(email, password)
+    # 2. Start a session to talk to Otter.ai
+    with requests.Session() as s:
+        # Login
+        login_res = s.post("https://otter.ai/api/v1/login", json={
+            "username": email, "password": password
+        })
         
-        # Temporary storage on Vercel
-        temp_path = f"/tmp/{file.filename}"
-        with open(temp_path, "wb") as f:
-            f.write(await file.read())
-            
-        # Upload to Otter
-        speech_id = otter.upload_speech(temp_path)
-        return {"status": "processing", "speech_id": speech_id}
+        if login_res.status_code != 200:
+            return {"error": "Otter Login Failed", "details": login_res.text}
+
+        # 3. Forward the audio file
+        audio_content = await file.read()
+        upload_res = s.post(
+            "https://otter.ai/api/v1/speeches", 
+            files={'file': (file.filename, audio_content)}
+        )
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "info": "File sent to Otter successfully",
+            "otter_response": upload_res.json()
+        }
