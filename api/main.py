@@ -2,38 +2,35 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from otterai import OtterAI
 import os
 
-app = FastAPI()
+# --- THIS IS STEP 3: DEFINING 'app' ---
+app = FastAPI() 
 
 @app.get("/api/health")
-def health():
-    return {"status": "Service is live"}
+def health_check():
+    """This helps you test if the deployment is live"""
+    return {"status": "success", "message": "Python backend is active"}
 
 @app.post("/api/upload")
-async def process_audio(file: UploadFile = File(...)):
-    # Pull credentials from Vercel Environment Variables
+async def handle_audio_upload(file: UploadFile = File(...)):
+    """This handles your 3-speaker noisy audio"""
     email = os.getenv("OTTER_EMAIL")
     password = os.getenv("OTTER_PASSWORD")
     
-    if not email:
-        raise HTTPException(status_code=500, detail="Environment Variable OTTER_EMAIL not set")
+    if not email or not password:
+        return {"error": "Otter credentials missing in Vercel settings"}
 
     try:
-        # Initialize Otter
         otter = OtterAI()
         otter.login(email, password)
         
-        # Save audio file to Vercel's temporary storage
+        # Temporary storage on Vercel
         temp_path = f"/tmp/{file.filename}"
         with open(temp_path, "wb") as f:
             f.write(await file.read())
             
-        # Upload to Otter. Otter handles noise reduction and speaker diarization.
+        # Upload to Otter
         speech_id = otter.upload_speech(temp_path)
+        return {"status": "processing", "speech_id": speech_id}
         
-        return {
-            "status": "Processing",
-            "speech_id": speech_id,
-            "message": "Otter is separating the 3 speakers and cleaning noise."
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
